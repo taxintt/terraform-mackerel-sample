@@ -19,24 +19,22 @@ terraform {
 
 data "aws_caller_identity" "current" {}
 
-resource "random_string" "external_id" {
-  length  = 40
-  upper   = true
-  lower   = true
-  special = false
+resource "mackerel_service" "app" {
+  name = "app"
+  memo = "test service"
 }
 
 #
 # monitor
 #
 resource "mackerel_monitor" "external" {
-  name                  = "ping to https://example.com"
+  name                  = "response_time"
   notification_interval = 10
 
   external {
     method                 = "GET"
     url                    = "https://example.com"
-    service                = "app"
+    service                = mackerel_service.app.name
     response_time_critical = 10000
     response_time_warning  = 5000
     response_time_duration = 3
@@ -48,13 +46,14 @@ resource "mackerel_monitor" "request_success_rate" {
   name                  = "role average"
   notification_interval = 60
 
+  # ref: https://mackerel.io/ja/docs/entry/advanced/advanced-graph
   expression {
     expression = <<-EOF
-      avg(role("app").success_rate)
+      service(${mackerel_service.app.name}, response_time)
     EOF
     operator   = "<"
-    warning    = 99.9
-    critical   = 99.8
+    warning    = 10000
+    critical   = 13000
   }
 }
 
@@ -64,15 +63,21 @@ resource "mackerel_monitor" "request_success_rate" {
 resource "mackerel_aws_integration" "test" {
   name        = "test"
   memo        = "This aws integration is managed by Terraform."
-  role_arn    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${aws_iam_role.mackerel_integration.name}"
-  external_id = random_string.external_id.result
+  role_arn    = aws_iam_role.mackerel_integration.arn
+  external_id = var.external_id  # refer to Mackerel console
   region      = var.region
+
+  included_tags = "service:${mackerel_service.app.name}"
 
   ec2 {
     enable               = true
-    excluded_metrics     = []
     retire_automatically = true
   }
+
+  depends_on = [
+    aws_iam_role_policy.mackerel_integration,
+    aws_iam_role.mackerel_integration
+  ]
 }
 
 resource "aws_iam_role" "mackerel_integration" {
@@ -92,7 +97,7 @@ data "aws_iam_policy_document" "mackerel_integration_role" {
     condition {
       test     = "StringEquals"
       variable = "sts:ExternalId"
-      values   = [random_string.external_id.result]
+      values   = [var.external_id] # refer to Mackerel console
     }
   }
 }
