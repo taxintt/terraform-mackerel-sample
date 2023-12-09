@@ -42,7 +42,7 @@ resource "mackerel_monitor" "external" {
   }
 }
 
-resource "mackerel_monitor" "request_success_rate" {
+resource "mackerel_monitor" "request_latency" {
   name                  = "role average"
   notification_interval = 60
 
