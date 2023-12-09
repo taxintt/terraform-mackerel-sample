@@ -19,6 +19,7 @@ ENV=staging make plan
 ```
 
 ## terraform apply
+If terraform apply fails, rerun it
 ```
 ENV=staging make apply
 ```
